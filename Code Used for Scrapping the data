@@ -1,0 +1,73 @@
+This code uses the GitHub REST API to fetch a list of users and save their usernames to a file named login.txt
+import requests
+
+# Open a file to save usernames
+with open('login.txt', 'w') as file:
+    page = 1
+    while page <= 10:  # Adjust page range as needed for more users
+        response = requests.get(f'https://api.github.com/users?since={page}')
+        users = response.json()
+        
+        # Write each username to login.txt
+        for user in users:
+            file.write(user['login'] + '\n')
+        
+        page += 1
+
+The below code is used to scrap the users data and there repositeries.
+
+import json
+import csv
+import subprocess
+
+# Load GitHub usernames from 'login.txt' and store them in 'users_list'
+with open('login.txt', 'r') as txt_file:
+    users_list = [line.strip() for line in txt_file if line.strip()]
+
+# Initialize list for repository information and a counter for tracking
+repos_info = []
+counter = 0
+
+# Loop through each user in 'users_list' to fetch repository data
+for user in users_list:
+    try:
+        # Make GitHub API request to fetch each user's repositories
+        response = subprocess.run(
+            [
+                'gh', 'api', f'https://api.github.com/users/{user}/repos',
+                '--header', 'Accept: application/vnd.github+json',
+                '--header', 'X-GitHub-Api-Version: 2022-11-28'
+            ],
+            capture_output=True, text=True, check=True
+        )
+        repos_data = json.loads(response.stdout)
+        print(counter)  # Print counter to track progress
+        counter += 1
+
+        # Extract specific details from each repository and store in 'repos_info'
+        for repo in repos_data:
+            repos_info.append({
+                'login': user,
+                'full_name': repo.get('full_name', ''),
+                'created_at': repo.get('created_at', ''),
+                'stargazers_count': repo.get('stargazers_count', 0),
+                'watchers_count': repo.get('watchers_count', 0),
+                'language': repo.get('language', ''),
+                'has_projects': repo.get('has_projects', False),
+                'has_wiki': repo.get('has_wiki', False),
+                'license_name': repo.get('license', {}).get('name', '') if repo.get('license') else ''
+            })
+
+    except subprocess.CalledProcessError:
+        print("E:02")  # Error code if API request fails
+
+# Write the collected repository data to 'repositories.csv'
+with open('repositories.csv', mode='w', newline='', encoding='utf-8') as file:
+    columns = [
+        'login', 'full_name', 'created_at', 'stargazers_count', 
+        'watchers_count', 'language', 'has_projects', 
+        'has_wiki', 'license_name'
+    ]
+    writer = csv.DictWriter(file, fieldnames=columns)
+    writer.writeheader()
+    writer.writerows(repos_info)
